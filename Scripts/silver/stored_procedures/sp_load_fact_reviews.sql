@@ -1,4 +1,4 @@
--- DROP PROCEDURE IF EXISTS silver.sp_load_fact_reviews;
+-- DROP PROCEDURE silver.sp_load_fact_reviews();
 
 CREATE OR REPLACE PROCEDURE silver.sp_load_fact_reviews()
 LANGUAGE plpgsql
@@ -7,7 +7,7 @@ DECLARE
     v_inserted INT := 0;
     v_updated  INT := 0;
 BEGIN
-    -- STEP 1: Compute hashes and prepare review data
+    -- STEP 1: Compute stable hashes and prepare review data
     WITH review_data AS (
         SELECT
             r.reviewerid,
@@ -20,7 +20,8 @@ BEGIN
             p.product_key,
             u.user_key,
             t.time_key,
-            md5(r.reviewerid || r.unixreviewtime || r.asin || r.reviewtext || r.overall::TEXT || r.summary) AS review_hash
+            -- Only use stable identifiers for hash
+            md5(r.reviewerid || r.unixreviewtime || r.asin) AS review_hash
         FROM post_bronze.reviews r
         JOIN silver.dim_products p ON r.asin = p.asin
         JOIN silver.dim_users u ON r.reviewerid = u.reviewer_id
@@ -52,7 +53,7 @@ BEGIN
         WHERE f.review_hash IS NULL
         RETURNING 1 AS inserted_flag
     ),
-    -- STEP 3: Update existing reviews if any field changed
+    -- STEP 3: Update existing reviews if any mutable field changed
     updated AS (
         UPDATE silver.fact_reviews f
         SET

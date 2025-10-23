@@ -10,7 +10,7 @@ import pandas as pd
 engine = create_engine("postgresql+psycopg2://postgres:admin@localhost:5432/AmazonDB")
 
 # Load CSV file
-file_path = r"raw_data\metadata_category_clothing_shoes_and_jewelry_only.csv"
+file_path = r"raw_data\metadata_category_clothing_shoes_and_jewelry_only_newprice.csv"
 df_metadata = pd.read_csv(file_path)
 filename= path.basename(file_path)
 
