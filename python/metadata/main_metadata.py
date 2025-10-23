@@ -34,7 +34,7 @@ if __name__ == "__main__":
         table_name="metadata",
         engine=engine,
         schema="bronze",
-        key_cols=["metadataid"],
+        key_cols=["metadataid", "asin"],
         filename=filename
     )
 
