@@ -1,14 +1,33 @@
--- DROP PROCEDURE IF EXISTS silver.sp_load_fact_reviews();
+-- DROP PROCEDURE IF EXISTS silver.sp_load_fact_reviews;
 
 CREATE OR REPLACE PROCEDURE silver.sp_load_fact_reviews()
 LANGUAGE plpgsql
 AS $procedure$
 DECLARE
     v_inserted INT := 0;
-    v_updated INT := 0;
+    v_updated  INT := 0;
 BEGIN
-    -- STEP 1: Insert new reviews (SCD1 insert)
-    WITH inserted AS (
+    -- STEP 1: Compute hashes and prepare review data
+    WITH review_data AS (
+        SELECT
+            r.reviewerid,
+            r.unixreviewtime,
+            r.asin,
+            r.reviewtext,
+            r.overall::SMALLINT AS rating,
+            r.helpful,
+            r.summary,
+            p.product_key,
+            u.user_key,
+            t.time_key,
+            md5(r.reviewerid || r.unixreviewtime || r.asin || r.reviewtext || r.overall::TEXT || r.summary) AS review_hash
+        FROM post_bronze.reviews r
+        JOIN silver.dim_products p ON r.asin = p.asin
+        JOIN silver.dim_users u ON r.reviewerid = u.reviewer_id
+        JOIN silver.dim_time t ON r.unixreviewtime = t.unix_review_time
+    ),
+    -- STEP 2: Insert new reviews
+    inserted AS (
         INSERT INTO silver.fact_reviews (
             review_hash,
             product_key,
@@ -20,63 +39,54 @@ BEGIN
             summary
         )
         SELECT
-            md5(r.reviewerid || r.unixreviewtime || r.asin || r.reviewtext || r.overall::TEXT || r.summary) AS review_hash,
-            p.product_key,
-            u.user_key,
-            t.time_key,
-            r.overall::SMALLINT AS rating,
-            r.helpful,
-            r.reviewtext,
-            r.summary
-        FROM post_bronze.reviews r
-        JOIN silver.dim_products p ON r.asin = p.asin
-        JOIN silver.dim_time t ON r.unixreviewtime = t.unix_review_time
-        JOIN silver.dim_users u ON r.reviewerid = u.reviewer_id
-        LEFT JOIN silver.fact_reviews f 
-            ON f.review_hash = md5(r.reviewerid || r.unixreviewtime || r.asin || r.reviewtext || r.overall::TEXT || r.summary)
+            rd.review_hash,
+            rd.product_key,
+            rd.user_key,
+            rd.time_key,
+            rd.rating,
+            rd.helpful,
+            rd.reviewtext,
+            rd.summary
+        FROM review_data rd
+        LEFT JOIN silver.fact_reviews f ON f.review_hash = rd.review_hash
         WHERE f.review_hash IS NULL
         RETURNING 1 AS inserted_flag
-    )
-    SELECT COALESCE(COUNT(*), 0) INTO v_inserted
-    FROM inserted;
-
-    -- STEP 2: Update existing reviews if any data changed (SCD Type 1)
-    WITH updated AS (
+    ),
+    -- STEP 3: Update existing reviews if any field changed
+    updated AS (
         UPDATE silver.fact_reviews f
         SET
-            product_key = p.product_key,
-            user_key = u.user_key,
-            time_key = t.time_key,
-            rating = r.overall::SMALLINT,
-            helpful = r.helpful,
-            review_text = r.reviewtext,
-            summary = r.summary
-        FROM post_bronze.reviews r
-        JOIN silver.dim_products p ON r.asin = p.asin
-        JOIN silver.dim_time t ON r.unixreviewtime = t.unix_review_time
-        JOIN silver.dim_users u ON r.reviewerid = u.reviewer_id
-        WHERE f.review_hash = md5(r.reviewerid || r.unixreviewtime || r.asin || r.reviewtext || r.overall::TEXT || r.summary)
+            product_key = rd.product_key,
+            user_key = rd.user_key,
+            time_key = rd.time_key,
+            rating = rd.rating,
+            helpful = rd.helpful,
+            review_text = rd.reviewtext,
+            summary = rd.summary
+        FROM review_data rd
+        WHERE f.review_hash = rd.review_hash
           AND (
-              f.rating IS DISTINCT FROM r.overall::SMALLINT OR
-              f.helpful IS DISTINCT FROM r.helpful OR
-              f.review_text IS DISTINCT FROM r.reviewtext OR
-              f.summary IS DISTINCT FROM r.summary OR
-              f.product_key IS DISTINCT FROM p.product_key OR
-              f.user_key IS DISTINCT FROM u.user_key OR
-              f.time_key IS DISTINCT FROM t.time_key
+              f.rating IS DISTINCT FROM rd.rating OR
+              f.helpful IS DISTINCT FROM rd.helpful OR
+              f.review_text IS DISTINCT FROM rd.reviewtext OR
+              f.summary IS DISTINCT FROM rd.summary OR
+              f.product_key IS DISTINCT FROM rd.product_key OR
+              f.user_key IS DISTINCT FROM rd.user_key OR
+              f.time_key IS DISTINCT FROM rd.time_key
           )
         RETURNING 1 AS updated_flag
     )
-    SELECT COALESCE(COUNT(*), 0) INTO v_updated
-    FROM updated;
+    -- STEP 4: Capture counts
+    SELECT
+        COALESCE(SUM(CASE WHEN i.inserted_flag = 1 THEN 1 ELSE 0 END), 0),
+        COALESCE(SUM(CASE WHEN u.updated_flag = 1 THEN 1 ELSE 0 END), 0)
+    INTO v_inserted, v_updated
+    FROM inserted i
+    FULL OUTER JOIN updated u ON true;
 
-    -- STEP 3: Audit log
+    -- STEP 5: Audit log
     INSERT INTO silver.etl_audit_log (
-        procedure_name,
-        load_timestamp,
-        rows_inserted,
-        rows_updated,
-        status
+        procedure_name, load_timestamp, rows_inserted, rows_updated, status
     )
     VALUES (
         'silver.sp_load_fact_reviews',
@@ -94,11 +104,7 @@ BEGIN
 EXCEPTION
     WHEN OTHERS THEN
         INSERT INTO silver.etl_audit_log (
-            procedure_name,
-            load_timestamp,
-            rows_inserted,
-            rows_updated,
-            status
+            procedure_name, load_timestamp, rows_inserted, rows_updated, status
         )
         VALUES (
             'silver.sp_load_fact_reviews',
