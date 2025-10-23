@@ -30,6 +30,5 @@ def schema_check_df(df: pd.DataFrame) -> pd.DataFrame:
         raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
 
     print(f"Total rows in DataFrame: {len(df)}")
-    print("Schema integrity check passed.")
 
     return df

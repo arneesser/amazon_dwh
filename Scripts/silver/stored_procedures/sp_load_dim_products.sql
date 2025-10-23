@@ -1,96 +1,62 @@
--- DROP PROCEDURE silver.sp_load_dim_products();
+-- DROP PROCEDURE IF EXISTS silver.sp_load_dim_products();
 
 CREATE OR REPLACE PROCEDURE silver.sp_load_dim_products()
- LANGUAGE plpgsql
+LANGUAGE plpgsql
 AS $procedure$
 DECLARE
     v_inserted INT := 0;
     v_updated INT := 0;
 BEGIN
-    -- 1. Insert new rows (deduplicated by asin)
-    INSERT INTO silver.dim_products (
-        metadataid, asin, category, salesrank, imurl, categories, title,
-        description, price, related, brand
+    -- 1. CTE to deduplicate and pick latest metadata per ASIN
+    WITH latest_metadata AS (
+        SELECT DISTINCT ON (m.asin)
+            m.metadataid,
+            m.asin,
+            (SELECT key FROM jsonb_each_text(m.salesrank::JSONB) LIMIT 1) AS category,
+            m.salesrank::JSONB AS salesrank,
+            m.imurl,
+            m.categories::JSONB AS categories,
+            m.title,
+            m.description,
+            m.price::NUMERIC(10,2) AS price,
+            m.related::JSONB AS related,
+            m.brand,
+            md5(concat_ws('|', m.metadataid, m.asin, m.title, m.description, m.price::text, m.brand, m.imurl)) AS metadata_hash
+        FROM post_bronze.metadata m
+        ORDER BY m.asin, m.metadataid DESC
+    ),
+    upsert AS (
+        INSERT INTO silver.dim_products (
+            metadataid, asin, category, salesrank, imurl, categories,
+            title, description, price, related, brand, metadata_hash
+        )
+        SELECT
+            lm.metadataid, lm.asin, lm.category, lm.salesrank, lm.imurl, lm.categories,
+            lm.title, lm.description, lm.price, lm.related, lm.brand, lm.metadata_hash
+        FROM latest_metadata lm
+        ON CONFLICT (asin) DO UPDATE
+        SET 
+            metadataid = EXCLUDED.metadataid,
+            category = EXCLUDED.category,
+            salesrank = EXCLUDED.salesrank,
+            imurl = EXCLUDED.imurl,
+            categories = EXCLUDED.categories,
+            title = EXCLUDED.title,
+            description = EXCLUDED.description,
+            price = EXCLUDED.price,
+            related = EXCLUDED.related,
+            brand = EXCLUDED.brand,
+            metadata_hash = EXCLUDED.metadata_hash
+        WHERE silver.dim_products.metadata_hash IS DISTINCT FROM EXCLUDED.metadata_hash
+        RETURNING xmax = 0 AS inserted_flag
     )
-    SELECT 
-        sub.metadataid,
-        sub.asin,
-        sub.category,
-        sub.salesrank,
-        sub.imurl,
-        sub.categories,
-        sub.title,
-        sub.description,
-        sub.price,
-        sub.related,
-        sub.brand
-    FROM (
-        SELECT DISTINCT ON (m.asin)
-            m.metadataid,
-            m.asin,
-            (SELECT key FROM jsonb_each_text(m.salesrank::JSONB) LIMIT 1) AS category,
-            m.salesrank::JSONB AS salesrank,
-            m.imurl,
-            m.categories::JSONB AS categories,
-            m.title,
-            m.description,
-            m.price::NUMERIC(10,2) AS price,
-            m.related::JSONB AS related,
-            m.brand
-        FROM post_bronze.metadata m
-        ORDER BY m.asin, m.metadataid DESC
-    ) sub
-    LEFT JOIN silver.dim_products d ON sub.asin = d.asin
-    WHERE d.asin IS NULL;
+	SELECT
+	    COALESCE(SUM(CASE WHEN inserted_flag THEN 1 ELSE 0 END), 0),
+	    COALESCE(SUM(CASE WHEN NOT inserted_flag THEN 1 ELSE 0 END), 0)
+	INTO v_inserted, v_updated
+    FROM upsert;
 
-    GET DIAGNOSTICS v_inserted = ROW_COUNT;
-
-    -- 2. Update existing rows if any column has changed
-    UPDATE silver.dim_products d
-    SET 
-        metadataid = sub.metadataid,
-        category = sub.category,
-        salesrank = sub.salesrank,
-        imurl = sub.imurl,
-        categories = sub.categories,
-        title = sub.title,
-        description = sub.description,
-        price = sub.price,
-        related = sub.related,
-        brand = sub.brand
-    FROM (
-        SELECT DISTINCT ON (m.asin)
-            m.metadataid,
-            m.asin,
-            (SELECT key FROM jsonb_each_text(m.salesrank::JSONB) LIMIT 1) AS category,
-            m.salesrank::JSONB AS salesrank,
-            m.imurl,
-            m.categories::JSONB AS categories,
-            m.title,
-            m.description,
-            m.price::NUMERIC(10,2) AS price,
-            m.related::JSONB AS related,
-            m.brand
-        FROM post_bronze.metadata m
-        ORDER BY m.asin, m.metadataid DESC
-    ) sub
-    WHERE d.asin = sub.asin
-      AND (
-            d.metadataid IS DISTINCT FROM sub.metadataid OR
-            d.category IS DISTINCT FROM sub.category OR
-            d.salesrank IS DISTINCT FROM sub.salesrank OR
-            d.imurl IS DISTINCT FROM sub.imurl OR
-            d.categories IS DISTINCT FROM sub.categories OR
-            d.title IS DISTINCT FROM sub.title OR
-            d.description IS DISTINCT FROM sub.description OR
-            d.price IS DISTINCT FROM sub.price OR
-            d.related IS DISTINCT FROM sub.related OR
-            d.brand IS DISTINCT FROM sub.brand
-      );
-
-    GET DIAGNOSTICS v_updated = ROW_COUNT;
-
-    -- 3. Audit log
+    -- 2. Audit log
     INSERT INTO silver.etl_audit_log (
         procedure_name, load_timestamp, rows_inserted, rows_updated, status
     )
@@ -106,5 +72,4 @@ EXCEPTION
         VALUES ('silver.sp_load_dim_products', NOW(), v_inserted, v_updated, 'failure');
         RAISE NOTICE 'Error during silver.sp_load_dim_products: %', SQLERRM;
 END;
-$procedure$
-;
+$procedure$;
