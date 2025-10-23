@@ -2,14 +2,14 @@ DROP TABLE IF EXISTS bronze.reviews;
 
 CREATE table if not EXISTS bronze.reviews (       
     reviewerid TEXT NOT NULL,
-    asin TEXT NOT NULL,
+    asin TEXT,
     reviewername TEXT,
     helpful TEXT,                          
     reviewText TEXT,
-    overall FLOAT NOT NULL,
+    overall FLOAT,
     summary TEXT,
-    unixreviewtime BIGINT NOT NULL,
-    reviewTime TEXT NOT null,
+    unixreviewtime BIGINT,
+    reviewTime TEXT,
     batch_timestamp TIMESTAMP,
     filename TEXT
 );
