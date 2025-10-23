@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS bronze.reviews;
 
 CREATE table if not EXISTS bronze.reviews (       
-    reviewerid TEXT NOT NULL,
+    reviewerid TEXT,
     asin TEXT,
     reviewername TEXT,
     helpful TEXT,                          
