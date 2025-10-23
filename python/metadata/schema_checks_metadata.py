@@ -1,5 +1,5 @@
 import pandas as pd
-from utils.config import metadata_cols
+from python.utils.config import metadata_cols
 
 def schema_check_df(df: pd.DataFrame) -> pd.DataFrame:
     """

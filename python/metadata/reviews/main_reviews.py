@@ -1,6 +1,6 @@
 from .preprocess_reviews import preprocess_df
 from .schema_checks_reviews import  schema_check_df
-from utils.etl_load import incremental_load
+from python.utils.etl_load import incremental_load
 
 from sqlalchemy import create_engine
 from os import path
