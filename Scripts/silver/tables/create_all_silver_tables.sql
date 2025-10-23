@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS silver.fact_reviews (
     summary TEXT
 );
 
--- Indexes for faster joins
+-- Indexes for faster joins/lookups
 CREATE UNIQUE INDEX IF NOT EXISTS idx_silver_fact_reviews_review_hash
     ON silver.fact_reviews(review_hash);
 

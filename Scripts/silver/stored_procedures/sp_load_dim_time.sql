@@ -1,53 +1,63 @@
--- DROP PROCEDURE IF EXISTS silver.sp_load_dim_time();
+-- DROP PROCEDURE IF EXISTS silver.sp_load_dim_time;
 
 CREATE OR REPLACE PROCEDURE silver.sp_load_dim_time()
 LANGUAGE plpgsql
 AS $procedure$
 DECLARE
     v_inserted INT := 0;
-    v_updated INT := 0;  
 BEGIN
-    -- 1. Insert new timestamps (SCD Type 1)
-    WITH inserted AS (
-        INSERT INTO silver.dim_time (
-            review_timestamp,
-            review_date,
-            "year",
-            quarter,
-            "month",
-            month_name,
-            "day",
-            weekday,
-            weekday_name,
-            week_of_year,
-            unix_review_time
-        )
-        SELECT DISTINCT
-            to_timestamp(unixreviewtime)::timestamptz AS review_timestamp,
-            (to_timestamp(unixreviewtime)::timestamptz)::date AS review_date,
-            EXTRACT(YEAR FROM to_timestamp(unixreviewtime)::timestamptz)::int AS "year",
-            EXTRACT(QUARTER FROM to_timestamp(unixreviewtime)::timestamptz)::int AS quarter,
-            EXTRACT(MONTH FROM to_timestamp(unixreviewtime)::timestamptz)::int AS "month",
-            TRIM(TO_CHAR(to_timestamp(unixreviewtime)::timestamptz, 'Month')) AS month_name,
-            EXTRACT(DAY FROM to_timestamp(unixreviewtime)::timestamptz)::int AS "day",
-            EXTRACT(DOW FROM to_timestamp(unixreviewtime)::timestamptz)::int AS weekday,
-            TRIM(TO_CHAR(to_timestamp(unixreviewtime)::timestamptz, 'Day')) AS weekday_name,
-            TO_NUMBER(TO_CHAR(to_timestamp(unixreviewtime)::timestamptz, 'IW'), '99') AS week_of_year,
-            unixreviewtime AS unix_review_time
+    -- Step 1: Identify new timestamps directly
+    WITH new_timestamps AS (
+        SELECT
+            r.unixreviewtime,
+            to_timestamp(r.unixreviewtime)::timestamptz AS review_timestamp,
+            to_timestamp(r.unixreviewtime)::date AS review_date,
+            EXTRACT(YEAR FROM to_timestamp(r.unixreviewtime))::int AS year,
+            EXTRACT(QUARTER FROM to_timestamp(r.unixreviewtime))::int AS quarter,
+            EXTRACT(MONTH FROM to_timestamp(r.unixreviewtime))::int AS month,
+            TRIM(TO_CHAR(to_timestamp(r.unixreviewtime), 'Month')) AS month_name,
+            EXTRACT(DAY FROM to_timestamp(r.unixreviewtime))::int AS day,
+            EXTRACT(DOW FROM to_timestamp(r.unixreviewtime))::int AS weekday,
+            TRIM(TO_CHAR(to_timestamp(r.unixreviewtime), 'Day')) AS weekday_name,
+            TO_NUMBER(TO_CHAR(to_timestamp(r.unixreviewtime), 'IW'), '99') AS week_of_year
         FROM post_bronze.reviews r
-        WHERE unixreviewtime IS NOT NULL
-          AND NOT EXISTS (
-              SELECT 1
-              FROM silver.dim_time t
-              WHERE t.review_timestamp = to_timestamp(r.unixreviewtime)::timestamptz
-          )
-        RETURNING 1 AS inserted_flag
+        LEFT JOIN silver.dim_time t
+            ON t.unix_review_time = r.unixreviewtime
+        WHERE t.unix_review_time IS NULL
+        GROUP BY r.unixreviewtime
     )
-    SELECT COALESCE(COUNT(*), 0) INTO v_inserted
-    FROM inserted;
+    INSERT INTO silver.dim_time (
+        review_timestamp,
+        review_date,
+        "year",
+        quarter,
+        "month",
+        month_name,
+        "day",
+        weekday,
+        weekday_name,
+        week_of_year,
+        unix_review_time
+    )
+    SELECT
+        review_timestamp,
+        review_date,
+        year,
+        quarter,
+        month,
+        month_name,
+        day,
+        weekday,
+        weekday_name,
+        week_of_year,
+        unixreviewtime
+    FROM new_timestamps
+    ON CONFLICT (unix_review_time) DO NOTHING;
 
+    -- Step 2: Capture number of inserted rows
+    GET DIAGNOSTICS v_inserted = ROW_COUNT;
 
-    -- 2. Audit log
+    -- Step 3: Audit log
     INSERT INTO silver.etl_audit_log (
         procedure_name,
         load_timestamp,
@@ -59,11 +69,11 @@ BEGIN
         'silver.sp_load_dim_time',
         NOW(),
         v_inserted,
-        v_updated,
-        'success'
+        0,
+        CASE WHEN v_inserted = 0 THEN 'no_changes' ELSE 'success' END
     );
 
-    RAISE NOTICE 'Load complete for silver.dim_time: % inserted, % updated', v_inserted, v_updated;
+    RAISE NOTICE 'Load complete for silver.dim_time: % inserted, 0 updated', v_inserted;
 
 EXCEPTION
     WHEN OTHERS THEN
@@ -77,8 +87,8 @@ EXCEPTION
         VALUES (
             'silver.sp_load_dim_time',
             NOW(),
-            v_inserted,
-            v_updated,
+            COALESCE(v_inserted, 0),
+            0,
             'failure'
         );
         RAISE NOTICE 'Error during silver.sp_load_dim_time: %', SQLERRM;
