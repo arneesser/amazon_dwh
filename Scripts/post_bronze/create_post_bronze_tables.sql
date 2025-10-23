@@ -58,10 +58,10 @@ CREATE TABLE IF NOT EXISTS post_bronze.metadata (
     filename TEXT
 );
 
-create UNIQUE INDEX IF NOT EXISTS idx_postbronze_metadataid
+create INDEX IF NOT EXISTS idx_postbronze_metadataid
     ON post_bronze.metadata(metadataid);
 
-create UNIQUE INDEX IF NOT EXISTS idx_postbronze_asin
+create INDEX IF NOT EXISTS idx_postbronze_asin
     ON post_bronze.metadata(asin);
 
 

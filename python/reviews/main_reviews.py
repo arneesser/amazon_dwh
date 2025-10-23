@@ -11,7 +11,7 @@ import pandas as pd
 engine = create_engine("postgresql+psycopg2://postgres:admin@localhost:5432/AmazonDB")
 
 # Load CSV files
-file_path = r"raw_data\reviews_Clothing_Shoes_and_Jewelry_5.csv"
+file_path = r"raw_data\reviews_Clothing_Shoes_and_Jewelry_5_nullid.csv"
 df_reviews = pd.read_csv(file_path, index_col=0)
 filename= path.basename(file_path)
 
@@ -40,5 +40,6 @@ if __name__ == "__main__":
         key_cols=["reviewerid", "asin", "unixreviewtime"],
         filename=filename
         )
+
 
         
