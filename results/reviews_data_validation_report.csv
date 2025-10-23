@@ -1,0 +1,10 @@
+check,pass,error_message
+Column 'reviewerid' exists,True,
+Column 'asin' exists,True,
+Column 'reviewername' exists,True,
+Column 'helpful' exists,True,
+Column 'reviewtext' exists,True,
+Column 'overall' exists,True,
+Column 'summary' exists,True,
+Column 'unixreviewtime' exists,True,
+Column 'reviewtime' exists,True,

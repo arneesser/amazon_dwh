@@ -1,0 +1,11 @@
+check,pass,error_message
+Column 'metadataid' exists,True,
+Column 'asin' exists,True,
+Column 'salesrank' exists,True,
+Column 'imurl' exists,True,
+Column 'categories' exists,True,
+Column 'title' exists,True,
+Column 'description' exists,True,
+Column 'price' exists,True,
+Column 'related' exists,True,
+Column 'brand' exists,True,
