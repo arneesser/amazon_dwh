@@ -1,7 +1,7 @@
--- DROP PROCEDURE IF EXISTS silver.sp_load_dim_products;
+-- DROP PROCEDURE silver.sp_load_dim_products();
 
 CREATE OR REPLACE PROCEDURE silver.sp_load_dim_products()
-LANGUAGE plpgsql
+ LANGUAGE plpgsql
 AS $procedure$
 DECLARE
     v_inserted INT := 0;
@@ -77,4 +77,5 @@ EXCEPTION
         VALUES ('silver.sp_load_dim_products', NOW(), v_inserted, v_updated, 'failure');
         RAISE NOTICE 'Error during silver.sp_load_dim_products: %', SQLERRM;
 END;
-$procedure$;
+$procedure$
+;

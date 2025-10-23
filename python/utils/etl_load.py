@@ -30,15 +30,12 @@ def incremental_load(df: pd.DataFrame, table_name: str, engine, schema: str="bro
     df["tmp_business_key"] = make_hash(df, key_cols)
 
     # Step 2: Fetch existing hashes from destination table 
-    try:
-        existing_query = f"SELECT {', '.join(key_cols)} FROM {schema}.{table_name}"
-        existing = pd.read_sql(existing_query, engine)
-        if not existing.empty:
-            existing["tmp_business_key"] = make_hash(existing, key_cols)
-            existing_keys = set(existing["tmp_business_key"])
-        else:
-            existing_keys = set()
-    except Exception:
+    existing_query = f"SELECT {', '.join(key_cols)} FROM {schema}.{table_name}"
+    existing = pd.read_sql(existing_query, engine)
+    if not existing.empty:
+        existing["tmp_business_key"] = make_hash(existing, key_cols)
+        existing_keys = set(existing["tmp_business_key"])
+    else:
         existing_keys = set()
 
     # Step 3: Identify new rows 
