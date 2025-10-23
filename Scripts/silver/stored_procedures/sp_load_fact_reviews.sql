@@ -20,7 +20,6 @@ BEGIN
             p.product_key,
             u.user_key,
             t.time_key,
-            -- Only use stable identifiers for hash
             md5(r.reviewerid || r.unixreviewtime || r.asin) AS review_hash
         FROM post_bronze.reviews r
         JOIN silver.dim_products p ON r.asin = p.asin
@@ -70,10 +69,7 @@ BEGIN
               f.rating IS DISTINCT FROM rd.rating OR
               f.helpful IS DISTINCT FROM rd.helpful OR
               f.review_text IS DISTINCT FROM rd.reviewtext OR
-              f.summary IS DISTINCT FROM rd.summary OR
-              f.product_key IS DISTINCT FROM rd.product_key OR
-              f.user_key IS DISTINCT FROM rd.user_key OR
-              f.time_key IS DISTINCT FROM rd.time_key
+              f.summary IS DISTINCT FROM rd.summary
           )
         RETURNING 1 AS updated_flag
     )
