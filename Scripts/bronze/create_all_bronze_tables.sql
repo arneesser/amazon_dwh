@@ -54,16 +54,16 @@ CREATE TABLE IF NOT EXISTS bronze.metadata (
 -- =========================================
 DROP TABLE IF EXISTS bronze.reviews;
 
-CREATE TABLE IF NOT EXISTS bronze.reviews (
-    reviewerid TEXT NOT NULL,
-    asin TEXT NOT NULL,
+CREATE table if not EXISTS bronze.reviews (       
+    reviewerid TEXT,
+    asin TEXT,
     reviewername TEXT,
-    helpful TEXT,
+    helpful TEXT,                          
     reviewText TEXT,
-    overall FLOAT NOT NULL,
+    overall FLOAT,
     summary TEXT,
-    unixreviewtime BIGINT NOT NULL,
-    reviewTime TEXT NOT NULL,
+    unixreviewtime BIGINT,
+    reviewTime TEXT,
     batch_timestamp TIMESTAMP,
     filename TEXT
 );
