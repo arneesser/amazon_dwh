@@ -7,7 +7,7 @@ SELECT
     t.month,
     t.month_name,
     COUNT(*) AS total_reviews,
-    ROUND(AVG(f.rating)::numeric, 2) AS avg_rating
+    ROUND(AVG(f.rating), 2) AS avg_rating
 FROM silver.fact_reviews f
 JOIN silver.dim_products p ON f.product_key = p.product_key
 JOIN silver.dim_time t ON f.time_key = t.time_key
