@@ -1,6 +1,6 @@
 from .preprocess_metadata import preprocess_df
 from .schema_checks_metadata import schema_check_df
-from python.utils.etl_load import incremental_load
+from ingestion.utils.etl_load import incremental_load
 
 from sqlalchemy import create_engine
 from os import path
