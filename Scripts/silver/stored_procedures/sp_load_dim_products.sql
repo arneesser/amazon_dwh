@@ -30,6 +30,7 @@ BEGIN
         FROM ranked
         WHERE rn = 1
     ),
+		-- Step 1: insert new rows or update based on duplicate asin and different hash
     upsert AS (
         INSERT INTO silver.dim_products (
             metadataid, asin, category, salesrank, imurl, categories,

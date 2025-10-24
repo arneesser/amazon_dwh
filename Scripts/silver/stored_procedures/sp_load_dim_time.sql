@@ -6,7 +6,7 @@ AS $procedure$
 DECLARE
     v_inserted INT := 0;
 BEGIN
-    -- Step 1: Identify new timestamps directly
+    --Step 1: Identify new timestamps directly
     WITH new_timestamps AS (
         SELECT
             r.unixreviewtime,

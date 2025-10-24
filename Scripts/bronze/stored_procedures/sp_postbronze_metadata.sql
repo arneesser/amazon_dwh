@@ -11,18 +11,12 @@ DECLARE
     v_latest_ts TIMESTAMP;
     v_exists BOOLEAN;
 BEGIN
-    -- Capture the latest filename and batch timestamp from bronze safely
+    -- Capture the latest filename and batch timestamp from bronze
     SELECT filename, batch_timestamp
     INTO v_filename, v_latest_ts
     FROM bronze.metadata
     ORDER BY batch_timestamp DESC
     LIMIT 1;
-
-    -- If no data found, skip
-    IF v_filename IS NULL THEN
-        RAISE NOTICE 'No records found in bronze.metadata — skipping.';
-        RETURN;
-    END IF;
 
     -- Check if this batch was already processed (by filename + timestamp)
     SELECT EXISTS (
